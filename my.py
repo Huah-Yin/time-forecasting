@@ -17,6 +17,7 @@ from itertools import product
 import multiprocessing
 import seaborn as sns
 import joblib
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 
 # 过滤掉特定的警告
@@ -78,6 +79,7 @@ def save_model_params(params):
 def load_model_params():
     try:
         if os.path.exists(model_params_file):
+            print(f"\n尝试加载模型参数: {model_params_file}")
             with open(model_params_file, 'r') as f:
                 params = json.load(f)
                 
@@ -88,35 +90,74 @@ def load_model_params():
                     print(f"警告: 参数文件缺少键 {key}")
                     return None
                     
-            print(f"从文件加载模型参数: {model_params_file}")
+            print("加载的参数详情:")
+            print(f"SARIMA order: {params['sarima_order']}")
+            print(f"SARIMA seasonal_order: {params['sarima_seasonal_order']}")
+            print(f"XGBoost params: {params['xgb_params']}")
             return params
+        print(f"\n未找到参数文件: {model_params_file}")
         return None
     except Exception as e:
         print(f"加载模型参数时出错: {e}")
+        print("错误详情:")
+        traceback.print_exc()
         return None
 
 # 函数：保存XGBoost模型
-def save_xgb_model(model, filename='xgb_model.json'):
+def save_xgb_model(model, filename='xgb_model.txt'):
     try:
-        if not isinstance(model, xgb.XGBRegressor):
-            raise ValueError("模型必须是XGBoost模型")
-        model.save_model(filename)
-        print(f"XGBoost模型已保存到文件: {filename}")
+        # 获取当前工作目录
+        current_dir = os.getcwd()
+        # 构建完整的文件路径
+        full_path = os.path.join(current_dir, filename)
+        
+        # 保存为txt格式
+        model.save_model(full_path)
+        print(f"XGBoost模型已保存为txt格式: {full_path}")
     except Exception as e:
         print(f"保存XGBoost模型时出错: {e}")
-        raise
+        print("错误详情:")
+        traceback.print_exc()
 
 # 函数：加载XGBoost模型
-def load_xgb_model(filename='xgb_model.json'):
+def load_xgb_model(filename='xgb_model.txt'):
     try:
-        if os.path.exists(filename):
+        # 获取当前工作目录
+        current_dir = os.getcwd()
+        # 构建完整的文件路径
+        full_path = os.path.join(current_dir, filename)
+        
+        print(f"\n检查XGBoost模型文件:")
+        print(f"当前工作目录: {current_dir}")
+        print(f"完整文件路径: {full_path}")
+        print(f"文件是否存在: {os.path.exists(full_path)}")
+        
+        if os.path.exists(full_path):
+            print(f"\n尝试加载XGBoost模型: {full_path}")
+            # 检查文件大小
+            file_size = os.path.getsize(full_path)
+            print(f"模型文件大小: {file_size} 字节")
+            
+            # 创建XGBoost模型实例
             model = xgb.XGBRegressor()
-            model.load_model(filename)
-            print(f"从文件加载XGBoost模型: {filename}")
-            return model
+            
+            # 尝试加载模型
+            try:
+                model.load_model(full_path)
+                print("XGBoost模型加载成功")
+                return model
+            except Exception as load_error:
+                print(f"加载模型失败: {load_error}")
+                print("错误详情:")
+                traceback.print_exc()
+                return None
+                    
+        print(f"\n未找到XGBoost模型文件: {full_path}")
         return None
     except Exception as e:
         print(f"加载XGBoost模型时出错: {e}")
+        print("错误详情:")
+        traceback.print_exc()
         return None
 
 # 函数：保存图表
@@ -226,48 +267,85 @@ def main():
 
         # --- 3. 自动选择SARIMA模型参数 ---
         print("\n--- 3. 自动选择SARIMA模型参数 ---")
-        # 尝试加载已保存的模型参数
+        
+        # 尝试加载已保存的参数
         saved_params = load_model_params()
         
-        if saved_params:
-            print("使用已保存的模型参数...")
-            # 使用保存的参数创建模型
-            model_auto_arima = auto_arima(timeseries, 
-                                        seasonal=True,
-                                        m=12,
-                                        order=saved_params['sarima_order'],
-                                        seasonal_order=saved_params['sarima_seasonal_order'])
+        if saved_params is not None:
+            print("\n使用已保存的SARIMA参数...")
+            order = saved_params['sarima_order']
+            seasonal_order = saved_params['sarima_seasonal_order']
         else:
-            print("未找到已保存的模型参数，开始自动选择...")
-            # 使用 pmdarima 的 auto_arima 自动选择最优模型
-            model_auto_arima = auto_arima(timeseries, seasonal=True, m=12, stepwise=True, trace=True)
+            print("\n未找到已保存的参数，开始自动选择SARIMA参数...")
+            # 使用auto_arima自动选择最佳参数
+            model_auto_arima = auto_arima(
+                timeseries,
+                start_p=0, start_q=0,
+                max_p=5, max_q=5,
+                m=12,  # 季节性周期
+                start_P=0, start_Q=0,
+                max_P=2, max_Q=2,
+                seasonal=True,
+                d=1, D=1,  # 确保季节性差分
+                trace=True,
+                error_action='ignore',
+                suppress_warnings=True,
+                stepwise=True
+            )
             
-            # 保存模型参数
-            params = {
-                'sarima_order': model_auto_arima.order,
-                'sarima_seasonal_order': model_auto_arima.seasonal_order,
-                'xgb_params': None  # 初始化为 None，将在 XGBoost 训练后更新
-            }
-            save_model_params(params)
-
-        # 打印出最佳模型的摘要
-        print(f"最佳模型: {model_auto_arima.summary()}")
+            # 获取最佳参数
+            order = model_auto_arima.order
+            seasonal_order = model_auto_arima.seasonal_order
+            
+            # 保存参数
+            if saved_params is None:
+                saved_params = {
+                    'sarima_order': order,
+                    'sarima_seasonal_order': seasonal_order,
+                    'xgb_params': None
+                }
+            else:
+                saved_params['sarima_order'] = order
+                saved_params['sarima_seasonal_order'] = seasonal_order
+                
+            save_model_params(saved_params)
+            
+        print(f"使用SARIMA参数: order={order}, seasonal_order={seasonal_order}")
+        
+        # 使用选定的参数创建SARIMA模型
+        model_sarima = SARIMAX(
+            timeseries,
+            order=order,
+            seasonal_order=seasonal_order
+        )
+        
+        # 拟合模型
+        print("开始拟合SARIMA模型...")
+        results_sarima = model_sarima.fit(disp=False)
+        print("SARIMA模型拟合完成")
 
         # 获取SARIMA的预测值
-        y_pred_sarima = model_auto_arima.predict_in_sample()
+        y_pred_sarima = results_sarima.fittedvalues
 
         # --- 4. 可视化SARIMA拟合结果 ---
-        fig2 = plt.figure(figsize=(10, 6))
-        plt.plot(timeseries.index, timeseries, label=f'真实 {target_column} 值', linewidth=1.5, color='#2878B5')
-        plt.plot(timeseries.index, y_pred_sarima, label='SARIMA拟合值', linewidth=1.5, color='#C82423', linestyle='--')
-        plt.title(f'{target_column} 时间序列：SARIMA模型拟合', pad=10)
-        plt.xlabel('时间 / 序号')
-        plt.ylabel(f'{target_column} 值')
+        print("\n--- 4. 可视化SARIMA拟合结果 ---")
+        
+        # 创建时间索引
+        time_index = pd.date_range(start=data.index[0], periods=len(timeseries), freq='M')
+        
+        # 创建图表
+        plt.figure(figsize=(12, 6))
+        plt.plot(time_index, timeseries, label='实际值', color='blue')
+        plt.plot(time_index, y_pred_sarima, label='SARIMA预测', color='red', linestyle='--')
+        plt.title('SARIMA模型拟合结果')
+        plt.xlabel('时间')
+        plt.ylabel('值')
         plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        save_plot(fig2, 'sarima_fit')
-        plt.show()
+        plt.grid(True)
+        
+        # 保存图表
+        save_plot(plt.gcf(), 'sarima_fit.png')
+        plt.close()
 
         # --- 5. 计算残差 ---
         residuals = timeseries - y_pred_sarima
@@ -282,13 +360,14 @@ def main():
 
         # 尝试加载已保存的XGBoost模型和参数
         model_xgb = load_xgb_model()
-        all_params = load_model_params()
+        saved_params = load_model_params()
         
         # 检查模型和参数是否都成功加载
-        if model_xgb is not None and all_params is not None and all_params['xgb_params'] is not None:
-            print("使用已保存的XGBoost模型和参数进行预测...")
+        if model_xgb is not None and saved_params is not None and saved_params['xgb_params'] is not None:
+            print("\n使用已保存的XGBoost模型和参数进行预测...")
+            print(f"XGBoost参数: {saved_params['xgb_params']}")
         else:
-            print("未找到已保存的模型或参数，开始训练新模型...")
+            print("\n未找到已保存的模型或参数，开始训练新模型...")
             
             # 定义XGBoost参数网格
             param_grid = {
@@ -342,19 +421,21 @@ def main():
                 save_xgb_model(model_xgb)
                 
                 # 更新并保存所有模型参数
-                if all_params is None:
-                    all_params = {
-                        'sarima_order': model_auto_arima.order,
-                        'sarima_seasonal_order': model_auto_arima.seasonal_order,
+                if saved_params is None:
+                    saved_params = {
+                        'sarima_order': order,
+                        'sarima_seasonal_order': seasonal_order,
                         'xgb_params': best_params
                     }
                 else:
-                    all_params['xgb_params'] = best_params
+                    saved_params['xgb_params'] = best_params
                     
-                save_model_params(all_params)
+                save_model_params(saved_params)
                 
             except Exception as e:
                 print(f"模型训练过程中出错: {e}")
+                print("错误详情:")
+                traceback.print_exc()
                 print("使用默认参数创建模型...")
                 model_xgb = xgb.XGBRegressor(
                     objective='reg:squarederror',
@@ -364,16 +445,16 @@ def main():
                 model_xgb.fit(X_train, y_train)
                 
                 # 保存默认参数
-                if all_params is None:
-                    all_params = {
-                        'sarima_order': model_auto_arima.order,
-                        'sarima_seasonal_order': model_auto_arima.seasonal_order,
+                if saved_params is None:
+                    saved_params = {
+                        'sarima_order': order,
+                        'sarima_seasonal_order': seasonal_order,
                         'xgb_params': None
                     }
                 else:
-                    all_params['xgb_params'] = None
+                    saved_params['xgb_params'] = None
                     
-                save_model_params(all_params)
+                save_model_params(saved_params)
 
         # 预测残差
         try:

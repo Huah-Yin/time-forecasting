@@ -10,5 +10,11 @@
         0,
         12
     ],
-    "xgb_params": null
+    "xgb_params": {
+        "colsample_bytree": 0.8,
+        "learning_rate": 0.1,
+        "max_depth": 3,
+        "n_estimators": 50,
+        "subsample": 0.8
+    }
 }
