@@ -550,6 +550,74 @@ def main():
         save_plot(fig5, 'acf_pacf_residuals')
         plt.show()
 
+        
+        # --- 12. 改进版：预测未来 3 年（1095 天） ---
+        print("\n--- 12. 预测未来 3 年（含非线性修正） ---")
+
+        n_forecast = 365 * 3  # 未来预测步数
+        start_index = len(timeseries)
+        end_index = start_index + n_forecast
+
+        # 1. 使用 SARIMA 模型预测未来值
+        forecast_sarima = results_sarima.get_forecast(steps=n_forecast)
+        forecast_mean = forecast_sarima.predicted_mean
+        forecast_mean.index = np.arange(start_index, end_index)
+
+        # 2. 构造带滞后特征的残差训练数据
+        df_resid = pd.DataFrame({'residual': residuals})
+        df_resid['lag1'] = df_resid['residual'].shift(1)
+        df_resid['lag2'] = df_resid['residual'].shift(2)
+        df_resid['lag3'] = df_resid['residual'].shift(3)
+        df_resid.dropna(inplace=True)
+
+        X_lag = df_resid[['lag1', 'lag2', 'lag3']].values
+        y_lag = df_resid['residual'].values
+
+        # 3. 重新训练 XGBoost 残差模型（基于滞后特征）
+        model_xgb_lag = xgb.XGBRegressor(objective='reg:squarederror', n_jobs=-1, random_state=42)
+        model_xgb_lag.fit(X_lag, y_lag)
+
+        # 4. 用滚动方式预测未来残差
+        last_lags = df_resid[['lag1', 'lag2', 'lag3']].values[-1].tolist()
+        forecast_residuals = []
+
+        for _ in range(n_forecast):
+            x_input = np.array(last_lags[-3:]).reshape(1, -1)
+            next_resid = model_xgb_lag.predict(x_input)[0]
+            forecast_residuals.append(next_resid)
+            last_lags.append(next_resid)
+
+        # 5. 合成最终预测结果（SARIMA + 残差修正）
+        final_forecast = forecast_mean.values + np.array(forecast_residuals)
+
+        # 6. 可视化
+        plt.figure(figsize=(12, 6))
+
+# 蓝线：真实值
+        plt.plot(timeseries.index, timeseries, label='真实值', color='blue', linewidth=1.0)
+
+        # 红线：测试集预测
+        plt.plot(timeseries.index[-len(final_pred):], final_pred, label='预测值 (SARIMA + XGBoost)', 
+                linestyle='--', color='#C82423', linewidth=1.2)
+
+        # 黄线：未来 3 年预测
+        plt.plot(np.arange(start_index, end_index), final_forecast, label='未来3年预测 (SARIMA + XGBoost)', 
+                linestyle='--', color='gold', linewidth=0.8)
+
+        plt.axvline(x=start_index, color='gray', linestyle=':', linewidth=0.8, label='预测起点')
+
+        plt.axvline(x=end_index, color='gray', linestyle=':', linewidth=0.8, label='预测终点')
+        plt.title(f'{target_column} 时间序列预测（未来1095天，非线性残差修正）', pad=10)
+        plt.xlabel('时间 / 序号')
+        plt.ylabel(f'{target_column} 值')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        save_plot(plt.gcf(), 'future_3_year_forecast')
+        plt.show()
+
+
+
         print("\n所有图表已生成完成！")
         
     except Exception as e:
