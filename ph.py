@@ -554,7 +554,7 @@ def main():
         # --- 12. 改进版：预测未来 3 年（1095 天） ---
         print("\n--- 12. 预测未来 3 年（含非线性修正） ---")
 
-        n_forecast = 365 * 3  # 未来预测步数
+        n_forecast = 365 # 未来预测步数
         start_index = len(timeseries)
         end_index = start_index + n_forecast
 
@@ -601,19 +601,33 @@ def main():
                 linestyle='--', color='#C82423', linewidth=1.2)
 
         # 黄线：未来 3 年预测
-        plt.plot(np.arange(start_index, end_index), final_forecast, label='未来3年预测 (SARIMA + XGBoost)', 
+        plt.plot(np.arange(start_index, end_index), final_forecast, label='未来1年预测 (SARIMA + XGBoost)', 
                 linestyle='--', color='gold', linewidth=0.8)
 
         plt.axvline(x=start_index, color='gray', linestyle=':', linewidth=0.8, label='预测起点')
 
         plt.axvline(x=end_index, color='gray', linestyle=':', linewidth=0.8, label='预测终点')
-        plt.title(f'{target_column} 时间序列预测（未来1095天，非线性残差修正）', pad=10)
+        plt.title(f'{target_column} 时间序列预测（未来365天，非线性残差修正）', pad=10)
         plt.xlabel('时间 / 序号')
         plt.ylabel(f'{target_column} 值')
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        save_plot(plt.gcf(), 'future_3_year_forecast')
+        save_plot(plt.gcf(), 'future_1_year_forecast')
+        plt.show()
+
+        # --- 生成一阶差分图 ---
+        diff_series = timeseries.diff().dropna()
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(diff_series.index, diff_series, color='skyblue', linewidth=1, label='一阶差分后的  pH  值（用于ACF/PACF）')
+        plt.title('一阶差分后的  pH  值（用于ACF/PACF）', pad=10)
+        plt.xlabel('时间 / 序号')
+        plt.ylabel('差分后的 pH 值')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        save_plot(plt.gcf(), 'differenced_pH_for_acf_pacf')
         plt.show()
 
 
