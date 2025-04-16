@@ -1,0 +1,20 @@
+{
+    "sarima_order": [
+        5,
+        1,
+        0
+    ],
+    "sarima_seasonal_order": [
+        2,
+        1,
+        0,
+        12
+    ],
+    "xgb_params": {
+        "colsample_bytree": 0.8,
+        "learning_rate": 0.01,
+        "max_depth": 3,
+        "n_estimators": 50,
+        "subsample": 1.0
+    }
+}
