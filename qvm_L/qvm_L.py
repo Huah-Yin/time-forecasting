@@ -637,13 +637,13 @@ def main():
         # 6. 可视化
         plt.figure(figsize=(12, 6))
 
-# 蓝线：真实值
+        # 蓝线：真实值
         plt.plot(timeseries.index, timeseries, label='真实值', color='blue', linewidth=1.0)
-
-        # 红线：测试集预测
-        plt.plot(timeseries.index[-len(final_pred):], final_pred, label='预测值 (SARIMA + XGBoost)', 
-                linestyle='--', color='#C82423', linewidth=1.2)
-
+        #red
+        warmup=20
+        y_plot = np.concatenate([timeseries[:warmup-1], y_pred_sarima[warmup:]])
+        plt.plot(timeseries.index, y_plot, 
+         label='预测值 (SARIMA + XGBoost)', linestyle='--', color='red', linewidth=1.0)
         # 黄线：未来 3 年预测
         plt.plot(np.arange(start_index, end_index), final_forecast, label='未来1年预测 (SARIMA + XGBoost)', 
                 linestyle='--', color='gold', linewidth=0.8)

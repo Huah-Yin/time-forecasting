@@ -596,9 +596,9 @@ def main():
 
 # 蓝线：真实值
         plt.plot(timeseries.index, timeseries, label='真实值', color='blue', linewidth=1.0)
-
+        warmup=3
         # 红线：测试集预测
-        plt.plot(timeseries.index[-len(final_pred):], final_pred, label='预测值 (SARIMA + XGBoost)', 
+        plt.plot(timeseries.index[3:],y_pred_sarima[warmup+1:], label='预测值 (SARIMA + XGBoost)', 
                 linestyle='--', color='#C82423', linewidth=1.2)
 
         # 黄线：未来 3 年预测
