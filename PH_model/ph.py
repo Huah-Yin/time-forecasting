@@ -72,7 +72,7 @@ for folder in ['plots', 'svg']:
 
 # --- 配置和参数 ---
 # CSV 文件名
-csv_file = 'sheet1.csv'
+csv_file = os.path.join('..', 'sheet1.csv')
 # 要分析的数据列名
 target_column = 'pH'
 # 模型参数文件
