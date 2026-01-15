@@ -71,7 +71,7 @@ for folder in ['plots', 'svg']:
 
 # --- 配置和参数 ---
 # CSV 文件名
-csv_file = 'sheet1.csv'
+csv_file = os.path.join('..', 'sheet1.csv')
 # 要分析的数据列名
 target_column = 'COD_mg/L'
 # 模型参数文件
@@ -623,7 +623,7 @@ def main():
                  label='真实值', color='blue', linewidth=1.0)
 
         # 红线：测试集预测
-        warmup=3
+        warmup = 3
         plt.plot(timeseries.index[warmup:], y_pred_sarima[warmup+1:], label='预测值 (SARIMA + XGBoost)',
                  linestyle='--', color='#C82423', linewidth=1.2)
 
@@ -649,7 +649,8 @@ def main():
         diff_series = timeseries.diff().dropna()
 
         plt.figure(figsize=(12, 6))
-        plt.plot(diff_series.index, diff_series, color='skyblue', linewidth=1, label='一阶差分后的 COD_mg/L 值（用于ACF/PACF）')
+        plt.plot(diff_series.index, diff_series, color='skyblue',
+                 linewidth=1, label='一阶差分后的 COD_mg/L 值（用于ACF/PACF）')
         plt.title('一阶差分后的 COD_mg/L 值（用于ACF/PACF）', pad=10)
         plt.xlabel('时间 / 序号')
         plt.ylabel('差分后的 COD_mg/L 值')
